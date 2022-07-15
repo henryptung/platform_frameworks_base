@@ -37,6 +37,8 @@ import static android.content.Intent.EXTRA_PACKAGE_NAME;
 import static android.content.Intent.EXTRA_VERSION_CODE;
 import static android.content.pm.PackageManager.CERT_INPUT_RAW_X509;
 import static android.content.pm.PackageManager.CERT_INPUT_SHA256;
+import static android.content.Intent.CATEGORY_BROWSABLE;
+import static android.content.Intent.CATEGORY_DEFAULT;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED;
@@ -5159,6 +5161,10 @@ public class PackageManagerService extends IPackageManager.Stub
                             InstantAppRegistry.DEFAULT_UNINSTALLED_INSTANT_APP_MIN_CACHE_PERIOD))) {
                 return;
             }
+
+            // 12. Clear temp install session files
+            mInstallerService.freeStageDirs(volumeUuid);
+
         } else {
             try {
                 mInstaller.freeCache(volumeUuid, bytes, 0, 0);
@@ -18581,6 +18587,16 @@ public class PackageManagerService extends IPackageManager.Stub
                 Slog.w(TAG, "Not removing package " + packageName + " with versionCode "
                         + uninstalledPs.versionCode + " != " + versionCode);
                 return PackageManager.DELETE_FAILED_INTERNAL_ERROR;
+            }
+
+            if (isSystemApp(uninstalledPs)) {
+                UserInfo userInfo = mUserManager.getUserInfo(userId);
+                if (userInfo == null || !userInfo.isAdmin()) {
+                    Slog.w(TAG, "Not removing package " + packageName
+                            + " as only admin user may downgrade system apps");
+                    EventLog.writeEvent(0x534e4554, "170646036", -1, packageName);
+                    return PackageManager.DELETE_FAILED_USER_RESTRICTED;
+                }
             }
 
             disabledSystemPs = mSettings.getDisabledSystemPkgLPr(packageName);
